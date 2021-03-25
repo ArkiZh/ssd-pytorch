@@ -1,0 +1,8 @@
+*.pth
+/dataset/**/*.xml
+/dataset/**/*.txt
+/dataset/**/*.jpg
+/*.txt
+__pycache__/
+/test/input/
+/test/results/
