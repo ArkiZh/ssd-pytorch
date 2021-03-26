@@ -1,8 +1,8 @@
-#----------------------------------------------------#
+# ----------------------------------------------------#
 #   获取测试集的ground-truth
 #   具体视频教程可查看
 #   https://www.bilibili.com/video/BV1zE411u7Vw
-#----------------------------------------------------#
+# ----------------------------------------------------#
 import colorsys
 import os
 import warnings
@@ -22,17 +22,18 @@ from utils.config import Config
 
 MEANS = (104, 117, 123)
 
+
 class mAP_SSD(SSD):
     def generate(self):
         self.confidence = 0.01
-        #-------------------------------#
+        # -------------------------------#
         #   计算总的类的数量
-        #-------------------------------#
+        # -------------------------------#
         self.num_classes = len(self.class_names) + 1
 
-        #-------------------------------#
+        # -------------------------------#
         #   载入模型与权值
-        #-------------------------------#
+        # -------------------------------#
         model = get_ssd("test", self.num_classes, self.confidence, self.nms_iou)
         print('Loading weights into state dict...')
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -53,26 +54,26 @@ class mAP_SSD(SSD):
             map(lambda x: (int(x[0] * 255), int(x[1] * 255), int(x[2] * 255)),
                 self.colors))
 
-    #---------------------------------------------------#
+    # ---------------------------------------------------#
     #   检测图片
-    #---------------------------------------------------#
-    def detect_image(self,image_id,image):
-        f = open("./input/detection-results/"+image_id+".txt","w") 
+    # ---------------------------------------------------#
+    def detect_image(self, image_id, image):
+        f = open("./input/detection-results/" + image_id + ".txt", "w")
         image_shape = np.array(np.shape(image)[0:2])
-    
-        #---------------------------------------------------------#
+
+        # ---------------------------------------------------------#
         #   给图像增加灰条，实现不失真的resize
         #   也可以直接resize进行识别
-        #---------------------------------------------------------#
+        # ---------------------------------------------------------#
         if self.letterbox_image:
-            crop_img = np.array(letterbox_image(image, (self.input_shape[1],self.input_shape[0])))
+            crop_img = np.array(letterbox_image(image, (self.input_shape[1], self.input_shape[0])))
         else:
             crop_img = image.convert('RGB')
-            crop_img = crop_img.resize((self.input_shape[1],self.input_shape[0]), Image.BICUBIC)
+            crop_img = crop_img.resize((self.input_shape[1], self.input_shape[0]), Image.BICUBIC)
 
-        photo = np.array(crop_img,dtype = np.float64)
+        photo = np.array(crop_img, dtype=np.float64)
         with torch.no_grad():
-            photo = Variable(torch.from_numpy(np.expand_dims(np.transpose(photo - MEANS, (2,0,1)),0)).type(torch.FloatTensor))
+            photo = Variable(torch.from_numpy(np.expand_dims(np.transpose(photo - MEANS, (2, 0, 1)), 0)).type(torch.FloatTensor))
             if self.cuda:
                 photo = photo.cuda()
             preds = self.net(photo)
@@ -84,7 +85,7 @@ class mAP_SSD(SSD):
                 j = 0
                 while preds[0, i, j, 0] >= self.confidence:
                     score = preds[0, i, j, 0]
-                    label_name = self.class_names[i-1]
+                    label_name = self.class_names[i - 1]
                     pt = (preds[0, i, j, 1:]).detach().numpy()
                     coords = [pt[0], pt[1], pt[2], pt[3]]
                     top_conf.append(score)
@@ -92,37 +93,42 @@ class mAP_SSD(SSD):
                     top_bboxes.append(coords)
                     j = j + 1
 
-        if len(top_conf)<=0:
-            return 
-            
+        if len(top_conf) <= 0:
+            return
+
         top_conf = np.array(top_conf)
         top_label = np.array(top_label)
         top_bboxes = np.array(top_bboxes)
-        top_xmin, top_ymin, top_xmax, top_ymax = np.expand_dims(top_bboxes[:,0],-1),np.expand_dims(top_bboxes[:,1],-1),np.expand_dims(top_bboxes[:,2],-1),np.expand_dims(top_bboxes[:,3],-1)
-        #-----------------------------------------------------------#
+        top_xmin, top_ymin, top_xmax, top_ymax = np.expand_dims(top_bboxes[:, 0], -1), np.expand_dims(top_bboxes[:, 1], -1), np.expand_dims(top_bboxes[:, 2], -1), np.expand_dims(top_bboxes[:, 3], -1)
+        # -----------------------------------------------------------#
         #   去掉灰条部分
-        #-----------------------------------------------------------#
+        # -----------------------------------------------------------#
         if self.letterbox_image:
-            boxes = ssd_correct_boxes(top_ymin,top_xmin,top_ymax,top_xmax,np.array([self.input_shape[0],self.input_shape[1]]),image_shape)
+            boxes = ssd_correct_boxes(top_ymin, top_xmin, top_ymax, top_xmax, np.array([self.input_shape[0], self.input_shape[1]]), image_shape)
         else:
             top_xmin = top_xmin * image_shape[1]
             top_ymin = top_ymin * image_shape[0]
             top_xmax = top_xmax * image_shape[1]
             top_ymax = top_ymax * image_shape[0]
-            boxes = np.concatenate([top_ymin,top_xmin,top_ymax,top_xmax], axis=-1)
+            boxes = np.concatenate([top_ymin, top_xmin, top_ymax, top_xmax], axis=-1)
 
         for i, c in enumerate(top_label):
             predicted_class = c
             score = str(float(top_conf[i]))
 
             top, left, bottom, right = boxes[i]
-            f.write("%s %s %s %s %s %s\n" % (predicted_class, score[:6], str(int(left)), str(int(top)), str(int(right)),str(int(bottom))))
+            f.write("%s %s %s %s %s %s\n" % (predicted_class, score[:6], str(int(left)), str(int(top)), str(int(right)), str(int(bottom))))
 
         f.close()
-        return 
+        return
 
-ssd = mAP_SSD()
-image_ids = open('VOCdevkit/VOC2007/ImageSets/Main/test.txt').read().strip().split()
+
+# TODO 要预测新模型，需要修改这里
+ssd = mAP_SSD(cuda=True, model_path="../logs/Epoch2-Total_Loss5.1876-Val_Loss2.3804.pth", classes_path="../dataset/TLR2009_label.txt")
+validate_path = '../dataset/TLR2009_validate.txt'
+
+with open(validate_path, mode="r", encoding="utf-8") as f:
+    image_paths = [line.split(" ")[0] for line in f.read().strip().split("\n")]
 
 if not os.path.exists("./input"):
     os.makedirs("./input")
@@ -131,12 +137,11 @@ if not os.path.exists("./input/detection-results"):
 if not os.path.exists("./input/images-optional"):
     os.makedirs("./input/images-optional")
 
-
-for image_id in tqdm(image_ids):
-    image_path = "./VOCdevkit/VOC2007/JPEGImages/"+image_id+".jpg"
+for image_path in image_paths:
     image = Image.open(image_path)
-    # 开启后在之后计算mAP可以可视化
-    # image.save("./input/images-optional/"+image_id+".jpg")
-    ssd.detect_image(image_id,image)
-    
+    print("Predict: {}".format(image_path))
+    image_id = os.path.basename(image_path)
+    image.save("./input/images-optional/" + image_id + ".jpg")
+    ssd.detect_image(image_id, image)
+
 print("Conversion completed!")

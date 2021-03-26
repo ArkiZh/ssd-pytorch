@@ -1,63 +1,28 @@
-#----------------------------------------------------#
+# ----------------------------------------------------#
 #   获取测试集的ground-truth
-#   具体视频教程可查看
-#   https://www.bilibili.com/video/BV1zE411u7Vw
-#----------------------------------------------------#
-import sys
+# ----------------------------------------------------#
 import os
-import glob
-import xml.etree.ElementTree as ET
 
-'''
-！！！！！！！！！！！！！注意事项！！！！！！！！！！！！！
-# 这一部分是当xml有无关的类的时候，下方有代码可以进行筛选！
-'''
-#---------------------------------------------------#
-#   获得类
-#---------------------------------------------------#
-def get_classes(classes_path):
-    '''loads the classes'''
-    with open(classes_path) as f:
-        class_names = f.readlines()
-    class_names = [c.strip() for c in class_names]
-    return class_names
+# TODO 要预测新模型，需要修改这里
+validate_path = '../dataset/TLR2009_validate.txt'
+label_name_path = "../dataset/TLR2009_label.txt"
 
-image_ids = open('VOCdevkit/VOC2007/ImageSets/Main/test.txt').read().strip().split()
+with open(validate_path, mode="r", encoding="utf-8") as f:
+    image_info =[line for line in f.read().strip().split("\n")]
+with open(label_name_path, mode="r", encoding="utf-8") as f:
+    labels = f.read().strip().split()
 
 if not os.path.exists("./input"):
     os.makedirs("./input")
 if not os.path.exists("./input/ground-truth"):
     os.makedirs("./input/ground-truth")
 
-for image_id in image_ids:
-    with open("./input/ground-truth/"+image_id+".txt", "w") as new_f:
-        root = ET.parse("VOCdevkit/VOC2007/Annotations/"+image_id+".xml").getroot()
-        for obj in root.findall('object'):
-            difficult_flag = False
-            if obj.find('difficult')!=None:
-                difficult = obj.find('difficult').text
-                if int(difficult)==1:
-                    difficult_flag = True
-            obj_name = obj.find('name').text
-            '''
-            ！！！！！！！！！！！！注意事项！！！！！！！！！！！！
-            # 这一部分是当xml有无关的类的时候，可以取消下面代码的注释
-            # 利用对应的classes.txt来进行筛选！！！！！！！！！！！！
-            '''
-            # classes_path = 'model_data/voc_classes.txt'
-            # class_names = get_classes(classes_path)
-            # if obj_name not in class_names:
-            #     continue
-
-            bndbox = obj.find('bndbox')
-            left = bndbox.find('xmin').text
-            top = bndbox.find('ymin').text
-            right = bndbox.find('xmax').text
-            bottom = bndbox.find('ymax').text
-
-            if difficult_flag:
-                new_f.write("%s %s %s %s %s difficult\n" % (obj_name, left, top, right, bottom))
-            else:
-                new_f.write("%s %s %s %s %s\n" % (obj_name, left, top, right, bottom))
+for i_info in image_info:
+    info = i_info.split(" ")
+    img_name = os.path.basename(info[0])
+    with open("./input/ground-truth/{}.txt".format(img_name), mode="w+", encoding="utf-8") as f:
+        for c in info[1:]:
+            cc = c.split(",")
+            f.write("{} {} {} {} {}\n".format(*[labels[int(cc[-1])]]+cc[:-1]))
 
 print("Conversion completed!")

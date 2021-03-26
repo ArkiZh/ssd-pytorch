@@ -121,22 +121,22 @@ def fit_one_epoch(net, criterion, epoch, epoch_size, epoch_size_val, gen, genval
 #   https://www.bilibili.com/video/BV1zE411u7Vw
 # ----------------------------------------------------#
 if __name__ == "__main__":
-    # -------------------------------#
-    #   是否使用Cuda
-    #   没有GPU可以设置成False
-    # -------------------------------#
     Cuda = True
-    # -------------------------------#
-    #   Dataloder的使用
-    # -------------------------------#
+    model = get_ssd("train", Config["num_classes"])
+    model_path = "model_data/ssd_weights.pth"
+    annotation_path = './dataset/TLR2009_train.txt'
+
+    initial_lr = 5e-4
+    initial_batch_size = 1
+    Init_Epoch = 0
+
+    Unfreeze_Epoch = 1
+    retrain_lr = 1e-4
+    retrain_batch_size = 1
+    End_Epoch = 2
+
     Use_Data_Loader = True
 
-    model = get_ssd("train", Config["num_classes"])
-
-    # ------------------------------------------------------#
-    #   权值文件请看README，百度网盘下载
-    # ------------------------------------------------------#
-    model_path = "model_data/ssd_weights.pth"
     print('Loading weights into state dict...')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model_dict = model.state_dict()
@@ -146,7 +146,7 @@ if __name__ == "__main__":
     model.load_state_dict(model_dict)
     print('Finished!')
 
-    annotation_path = '2007_train.txt'
+
     # ----------------------------------------------------------------------#
     #   验证集的划分在train.py代码里面进行
     #   2007_test.txt和2007_val.txt里面没有内容是正常的。训练不会使用到。
@@ -178,63 +178,53 @@ if __name__ == "__main__":
     #   提示OOM或者显存不足请调小Batch_size
     # ------------------------------------------------------#
     if True:
-        lr = 5e-4
-        Batch_size = 16
-        Init_Epoch = 0
-        Freeze_Epoch = 50
-
-        optimizer = optim.Adam(net.parameters(), lr=lr)
+        optimizer = optim.Adam(net.parameters(), lr=initial_lr)
         lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.92)
 
         if Use_Data_Loader:
             train_dataset = SSDDataset(lines[:num_train], (Config["min_dim"], Config["min_dim"]), True)
-            gen = DataLoader(train_dataset, shuffle=True, batch_size=Batch_size, num_workers=4, pin_memory=True,
+            gen = DataLoader(train_dataset, shuffle=True, batch_size=initial_batch_size, num_workers=4, pin_memory=True,
                              drop_last=True, collate_fn=ssd_dataset_collate)
 
             val_dataset = SSDDataset(lines[num_train:], (Config["min_dim"], Config["min_dim"]), False)
-            gen_val = DataLoader(val_dataset, shuffle=True, batch_size=Batch_size, num_workers=4, pin_memory=True,
+            gen_val = DataLoader(val_dataset, shuffle=True, batch_size=initial_batch_size, num_workers=4, pin_memory=True,
                                  drop_last=True, collate_fn=ssd_dataset_collate)
         else:
-            gen = Generator(Batch_size, lines[:num_train], (Config["min_dim"], Config["min_dim"]), Config["num_classes"]).generate(True)
-            gen_val = Generator(Batch_size, lines[num_train:], (Config["min_dim"], Config["min_dim"]), Config["num_classes"]).generate(False)
+            gen = Generator(initial_batch_size, lines[:num_train], (Config["min_dim"], Config["min_dim"]), Config["num_classes"]).generate(True)
+            gen_val = Generator(initial_batch_size, lines[num_train:], (Config["min_dim"], Config["min_dim"]), Config["num_classes"]).generate(False)
 
         for param in model.vgg.parameters():
             param.requires_grad = False
 
-        epoch_size = num_train // Batch_size
-        epoch_size_val = num_val // Batch_size
+        epoch_size = num_train // initial_batch_size
+        epoch_size_val = num_val // initial_batch_size
 
-        for epoch in range(Init_Epoch, Freeze_Epoch):
-            fit_one_epoch(net, criterion, epoch, epoch_size, epoch_size_val, gen, gen_val, Freeze_Epoch, Cuda)
+        for epoch in range(Init_Epoch, Unfreeze_Epoch):
+            fit_one_epoch(net, criterion, epoch, epoch_size, epoch_size_val, gen, gen_val, Unfreeze_Epoch, Cuda)
             lr_scheduler.step()
 
     if True:
-        lr = 1e-4
-        Batch_size = 8
-        Freeze_Epoch = 50
-        Unfreeze_Epoch = 100
-
-        optimizer = optim.Adam(net.parameters(), lr=lr)
+        optimizer = optim.Adam(net.parameters(), lr=retrain_lr)
         lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.92)
 
         if Use_Data_Loader:
             train_dataset = SSDDataset(lines[:num_train], (Config["min_dim"], Config["min_dim"]), True)
-            gen = DataLoader(train_dataset, shuffle=True, batch_size=Batch_size, num_workers=4, pin_memory=True,
+            gen = DataLoader(train_dataset, shuffle=True, batch_size=retrain_batch_size, num_workers=4, pin_memory=True,
                              drop_last=True, collate_fn=ssd_dataset_collate)
 
             val_dataset = SSDDataset(lines[num_train:], (Config["min_dim"], Config["min_dim"]), False)
-            gen_val = DataLoader(val_dataset, shuffle=True, batch_size=Batch_size, num_workers=4, pin_memory=True,
+            gen_val = DataLoader(val_dataset, shuffle=True, batch_size=retrain_batch_size, num_workers=4, pin_memory=True,
                                  drop_last=True, collate_fn=ssd_dataset_collate)
         else:
-            gen = Generator(Batch_size, lines[:num_train], (Config["min_dim"], Config["min_dim"]), Config["num_classes"]).generate(True)
-            gen_val = Generator(Batch_size, lines[num_train:], (Config["min_dim"], Config["min_dim"]), Config["num_classes"]).generate(False)
+            gen = Generator(retrain_batch_size, lines[:num_train], (Config["min_dim"], Config["min_dim"]), Config["num_classes"]).generate(True)
+            gen_val = Generator(retrain_batch_size, lines[num_train:], (Config["min_dim"], Config["min_dim"]), Config["num_classes"]).generate(False)
 
         for param in model.vgg.parameters():
             param.requires_grad = True
 
-        epoch_size = num_train // Batch_size
-        epoch_size_val = num_val // Batch_size
+        epoch_size = num_train // retrain_batch_size
+        epoch_size_val = num_val // retrain_batch_size
 
-        for epoch in range(Freeze_Epoch, Unfreeze_Epoch):
-            fit_one_epoch(net, criterion, epoch, epoch_size, epoch_size_val, gen, gen_val, Unfreeze_Epoch, Cuda)
+        for epoch in range(Unfreeze_Epoch, End_Epoch):
+            fit_one_epoch(net, criterion, epoch, epoch_size, epoch_size_val, gen, gen_val, End_Epoch, Cuda)
             lr_scheduler.step()

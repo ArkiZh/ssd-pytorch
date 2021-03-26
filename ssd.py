@@ -52,6 +52,7 @@ class SSD(object):
     # ---------------------------------------------------#
     def __init__(self, **kwargs):
         self.__dict__.update(self._defaults)
+        self.__dict__.update(kwargs)
         self.class_names = self._get_class()
         self.generate()
 
